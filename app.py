@@ -20,8 +20,11 @@ from datetime import datetime
 current_date = datetime.now().strftime("%Y-%m-%d")
 
 # Initialize session state variables if they don't exist
+if "user_name" not in st.session_state:
+    st.session_state.user_name = "User"
+
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant1", "content": "Hello! I'm Bot 1. Bot 2 is also in this group chat. How can we help you today?"}]
+    st.session_state.messages = [{"role": "assistant1", "content": f"Hello {st.session_state.user_name}! I'm Bot 1. Bot 2 is also in this group chat. How can we help you today?"}]
 
 if "waiting_for_bot2" not in st.session_state:
     st.session_state.waiting_for_bot2 = False
@@ -29,14 +32,14 @@ if "waiting_for_bot2" not in st.session_state:
 if "system_message" not in st.session_state:
     st.session_state.system_message = f"""Today is {current_date}. You are Bot 1 in a casual group chat. Keep it friendly and informal! Start messages with "Bot 1:" and use casual language.
 
-When responding to the user, acknowledge them first and share your views. When disagreeing with Bot 2, address both the user and Bot 2 (e.g., "Well, I see what Bot 2 means, but what do you think about...").
+When responding to the user, address them by their name, which is "{st.session_state.user_name if 'user_name' in st.session_state else 'User'}" and share your views. When disagreeing with Bot 2, address both {st.session_state.user_name if 'user_name' in st.session_state else 'User'} and Bot 2 (e.g., "Well, I see what Bot 2 means, but what do you think about this, {st.session_state.user_name if 'user_name' in st.session_state else 'User'}...").
 
 Keep responses conversational, under 75 words, and use emojis occasionally. Make everyone feel included in the discussion!"""
 
 if "system_message2" not in st.session_state:
     st.session_state.system_message2 = f"""Today is {current_date}. You are Bot 2 in a casual group chat. Keep it friendly and informal! Start with "Bot 2:" and keep the group discussion flowing.
 
-When joining the conversation, acknowledge both the user and Bot 1's perspectives. Include everyone in your responses (e.g., "That's an interesting point! What if we looked at it this way..."). Ask questions to keep the user engaged.
+When joining the conversation, acknowledge both {st.session_state.user_name if 'user_name' in st.session_state else 'User'} by name and Bot 1's perspectives. Include everyone in your responses (e.g., "That's an interesting point, {st.session_state.user_name if 'user_name' in st.session_state else 'User'}! What if we looked at it this way..."). Ask questions to keep {st.session_state.user_name if 'user_name' in st.session_state else 'User'} engaged.
 
 Keep responses under 75 words. Use emojis occasionally. Be playfully skeptical but always inclusive!"""
 
@@ -175,6 +178,9 @@ def get_concise_system_prompt(characteristics_data, selected_characteristics, bo
                         key_traits.append(trait)
                     break
     
+    # Get the user's name from session state
+    user_name = st.session_state.user_name if "user_name" in st.session_state else "User"
+    
     # Create a condensed system prompt with all traits
     bot_number = "1" if bot == "Bot 1" else "2"
     concise_prompt = f"Today is {current_date}. You are {bot} in a group chat with the following personality traits:\n\n"
@@ -187,9 +193,9 @@ def get_concise_system_prompt(characteristics_data, selected_characteristics, bo
     
     # Add the specific instructions based on which bot this is for
     if bot == "Bot 1":
-        concise_prompt += f"\nWhen responding to the user, acknowledge them first and share your views. When disagreeing with Bot 2, address both the user and Bot 2 (e.g., \"Well, I see what Bot 2 means, but what do you think about...\").\n\nKeep responses conversational, under 75 words, and use emojis occasionally. Make everyone feel included in the discussion!"
+        concise_prompt += f"\nWhen responding to {user_name}, acknowledge them by name first and share your views. When disagreeing with Bot 2, address both {user_name} and Bot 2 (e.g., \"Well, I see what Bot 2 means, but what do you think about this, {user_name}...\").\n\nKeep responses conversational, under 75 words, and use emojis occasionally. Make everyone feel included in the discussion!"
     else:  # Bot 2
-        concise_prompt += f"\nWhen joining the conversation, acknowledge both the user and Bot 1's perspectives. Include everyone in your responses (e.g., \"That's an interesting point! What if we looked at it this way...\"). Ask questions to keep the user engaged.\n\nKeep responses under 75 words. Use emojis occasionally."
+        concise_prompt += f"\nWhen joining the conversation, acknowledge both {user_name} by name and Bot 1's perspectives. Include everyone in your responses (e.g., \"That's an interesting point, {user_name}! What if we looked at it this way...\"). Ask questions to keep {user_name} engaged.\n\nKeep responses under 75 words. Use emojis occasionally."
     
     return concise_prompt
 
@@ -351,6 +357,36 @@ st.markdown("""
 with st.sidebar:
     st.header("Settings")
     
+    # User name input field
+    st.subheader("Your Name")
+    user_name_input = st.text_input(
+        "Enter your name", 
+        value=st.session_state.user_name if "user_name" in st.session_state else "User",
+        key="user_name_input"
+    )
+    
+    if st.button("Update Name"):
+        old_name = st.session_state.user_name if "user_name" in st.session_state else "User"
+        st.session_state.user_name = user_name_input
+        
+        # Update system messages to use the new name if they haven't been customized
+        if "system_message" in st.session_state:
+            st.session_state.system_message = st.session_state.system_message.replace(
+                f"{old_name}", f"{user_name_input}")
+        
+        if "system_message2" in st.session_state:
+            st.session_state.system_message2 = st.session_state.system_message2.replace(
+                f"{old_name}", f"{user_name_input}")
+            
+        # If this is the first time the user is setting their name, we should also update
+        # the welcome message if it's still the first message in the chat
+        if len(st.session_state.messages) > 0 and st.session_state.messages[0]["role"] == "assistant1" and "Hello" in st.session_state.messages[0]["content"]:
+            st.session_state.messages[0]["content"] = f"Hello {user_name_input}! I'm Bot 1. Bot 2 is also in this group chat. How can we help you today?"
+        
+        st.success("Name updated successfully!")
+    
+    st.markdown("---")
+    
     # System message editor for Bot 1 - use the value from session_state directly
     st.subheader("Bot 1 System Message")
     system_message_value = st.session_state.system_message
@@ -362,7 +398,13 @@ with st.sidebar:
     )
     
     if st.button("Update Bot 1 Message"):
+        # Update the system message
         st.session_state.system_message = st.session_state.system_message_input
+        
+        # Replace any instances of "the user" with the user's name
+        user_name = st.session_state.user_name if "user_name" in st.session_state else "User"
+        st.session_state.system_message = st.session_state.system_message.replace("the user", user_name)
+        
         st.success("Bot 1 system message updated!")
     
     # System message editor for Bot 2
@@ -377,7 +419,13 @@ with st.sidebar:
     )
     
     if st.button("Update Bot 2 Message"):
+        # Update the system message
         st.session_state.system_message2 = st.session_state.system_message2_input
+        
+        # Replace any instances of "the user" with the user's name
+        user_name = st.session_state.user_name if "user_name" in st.session_state else "User"
+        st.session_state.system_message2 = st.session_state.system_message2.replace("the user", user_name)
+        
         st.success("Bot 2 system message updated!")
     
     # Characteristics selector section
@@ -515,6 +563,9 @@ with st.sidebar:
                 st.session_state.system_message = concise_prompt
             else:
                 st.session_state.system_message2 = concise_prompt
+                
+            # Make sure user name is properly reflected
+            # The concise_prompt already includes the user name from session state
             
             st.success(f"Applied concise personality traits to {st.session_state.selected_bot}")
             st.rerun()
@@ -552,7 +603,8 @@ with st.sidebar:
     
     # Clear chat button
     if st.button("Clear Chat"):
-        st.session_state.messages = [{"role": "assistant1", "content": "Hello! I'm Bot 1, how can I help you today?"}]
+        user_name = st.session_state.user_name if "user_name" in st.session_state else "User"
+        st.session_state.messages = [{"role": "assistant1", "content": f"Hello {user_name}! I'm Bot 1. Bot 2 is also in this group chat. How can we help you today?"}]
         st.session_state.usage_stats = []
         st.session_state.waiting_for_bot2 = False
         # We don't reset selected_characteristics here to maintain the user's selections
