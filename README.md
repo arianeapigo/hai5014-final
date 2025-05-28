@@ -1,15 +1,8 @@
-# mySecondLLMbot
-Second boilerplate for class HAI5014
+# AI Chatbot Group Chat: Debate [working title]
+Code-based final project by Ariane Apigo, Jeong-in Choi, and Hae-min Lee for HAI5014, taught by Pim Kamphuis at Sungkyunkwan University, Seoul, South Korea in Spring 2025.
 
 To run the streamlit app, use the following command in your terminal:
 
 ```bash
 streamlit run app.py
 ```
-
-
-## Gemini API 
-
-Try to make the chatbot compatible with your Gemini API:
-
-[https://ai.google.dev/gemini-api/docs/openai](https://ai.google.dev/gemini-api/docs/openai)
