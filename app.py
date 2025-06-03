@@ -74,14 +74,14 @@ if "user_name" not in st.session_state:
     st.session_state.user_name = "User"
 
 def load_experiments():
-    """Load all experiment JSON files from the prompts directory"""
+    """Load all experiment JSON files from the characteristics directory"""
     experiments = []
-    prompts_dir = os.path.join(os.getcwd(), "prompts")
+    characteristics_dir = os.path.join(os.getcwd(), "characteristics")
     
-    if not os.path.exists(prompts_dir):
+    if not os.path.exists(characteristics_dir):
         return experiments
     
-    json_files = glob.glob(os.path.join(prompts_dir, "*.json"))
+    json_files = glob.glob(os.path.join(characteristics_dir, "*.json"))
     
     for file_path in json_files:
         try:
@@ -94,20 +94,37 @@ def load_experiments():
     return experiments
 
 def load_characteristics():
-    """Load the characteristics.json file from the prompts directory"""
-    prompts_dir = os.path.join(os.getcwd(), "prompts")
-    file_path = os.path.join(prompts_dir, "characteristics.json")
+    """Load the characteristic JSON files from the characteristics directory"""
+    characteristics_dir = os.path.join(os.getcwd(), "characteristics")
     
-    if not os.path.exists(file_path):
-        st.warning(f"characteristics.json not found in {prompts_dir}")
+    if not os.path.exists(characteristics_dir):
+        st.warning(f"characteristics directory not found at {characteristics_dir}")
         return None
     
     try:
-        with open(file_path, 'r') as f:
-            data = json.load(f)
-            return data
+        # Load debate characteristics
+        debate_path = os.path.join(characteristics_dir, "debate.json")
+        mbti_path = os.path.join(characteristics_dir, "mbti.json")
+        
+        all_characteristics = {"debate": None, "mbti": None}
+        
+        # Load debate.json
+        if os.path.exists(debate_path):
+            with open(debate_path, 'r') as f:
+                all_characteristics["debate"] = json.load(f)
+        else:
+            st.warning(f"debate.json not found in {characteristics_dir}")
+        
+        # Load mbti.json
+        if os.path.exists(mbti_path):
+            with open(mbti_path, 'r') as f:
+                all_characteristics["mbti"] = json.load(f)
+        else:
+            st.warning(f"mbti.json not found in {characteristics_dir}")
+        
+        return all_characteristics
     except Exception as e:
-        st.warning(f"Error loading characteristics.json: {str(e)}")
+        st.warning(f"Error loading characteristics files: {str(e)}")
         return None
 
 def has_same_characteristics(bot1_selections, bot2_selections):
@@ -145,7 +162,7 @@ def get_concise_system_prompt(characteristics_data, selected_characteristics, bo
     token-efficient representation to be used as the actual system prompt.
     
     Args:
-        characteristics_data: The full characteristics data from characteristics.json
+        characteristics_data: The full characteristics data with debate and mbti
         selected_characteristics: Dict of characteristic IDs to selected condition IDs
         bot: Which bot to create the system prompt for ("Bot 1" or "Bot 2")
         
@@ -158,25 +175,49 @@ def get_concise_system_prompt(characteristics_data, selected_characteristics, bo
     # Get the key personality traits from each selected characteristic
     key_traits = []
     
-    for characteristic in characteristics_data.get("characteristics", []):
-        c_id = characteristic["c-id"]
-        if c_id in selected_characteristics:
-            selected_id = selected_characteristics[c_id]
-            # Find the matching condition
-            for condition in characteristic.get("conditions", []):
-                if condition["id"] == selected_id:
-                    # Extract the first sentence as the key trait
-                    if "system_prompt" in condition:
-                        # Split by period to get first sentence, but handle cases where
-                        # the first sentence doesn't end with a period
-                        prompt = condition["system_prompt"]
-                        sentences = prompt.split('.')
-                        trait = sentences[0].strip()
-                        # If this trait contains important behavior instructions, try to include more
-                        if len(trait) < 40 and len(sentences) > 1:
-                            trait += ". " + sentences[1].strip()
-                        key_traits.append(trait)
-                    break
+    # Process debate characteristics
+    if characteristics_data.get("debate") and "characteristics" in characteristics_data["debate"]:
+        for characteristic in characteristics_data["debate"]["characteristics"]:
+            c_id = characteristic["c-id"]
+            if c_id in selected_characteristics:
+                selected_id = selected_characteristics[c_id]
+                # Find the matching condition
+                for condition in characteristic.get("conditions", []):
+                    if condition["id"] == selected_id:
+                        # Extract the first sentence as the key trait
+                        if "system_prompt" in condition:
+                            # Split by period to get first sentence, but handle cases where
+                            # the first sentence doesn't end with a period
+                            prompt = condition["system_prompt"]
+                            sentences = prompt.split('.')
+                            trait = sentences[0].strip()
+                            # If this trait contains important behavior instructions, try to include more
+                            if len(trait) < 40 and len(sentences) > 1:
+                                trait += ". " + sentences[1].strip()
+                            key_traits.append(trait)
+                        break
+    
+    # Process MBTI characteristics
+    if characteristics_data.get("mbti") and "characteristics" in characteristics_data["mbti"]:
+        for characteristic in characteristics_data["mbti"]["characteristics"]:
+            c_id = characteristic["c-id"]
+            if c_id in selected_characteristics:
+                selected_id = selected_characteristics[c_id]
+                # Find the matching condition
+                for condition in characteristic.get("conditions", []):
+                    if condition["id"] == selected_id:
+                        # Extract the first sentence as the key trait
+                        if "system_prompt" in condition:
+                            # Split by period to get first sentence, but handle cases where
+                            # the first sentence doesn't end with a period
+                            prompt = condition["system_prompt"]
+                            sentences = prompt.split('.')
+                            trait = sentences[0].strip()
+                            # If this trait contains important behavior instructions, try to include more
+                            if len(trait) < 40 and len(sentences) > 1:
+                                trait += ". " + sentences[1].strip()
+                            key_traits.append(trait)
+                        break
     
     # Get the user's name from session state
     user_name = st.session_state.user_name if "user_name" in st.session_state else "User"
@@ -435,7 +476,10 @@ with st.sidebar:
     # Load the characteristics data
     characteristics_data = load_characteristics()
     
-    if characteristics_data and "characteristics" in characteristics_data:
+    if characteristics_data and (
+        (characteristics_data.get("debate") and "characteristics" in characteristics_data["debate"]) or 
+        (characteristics_data.get("mbti") and "characteristics" in characteristics_data["mbti"])
+    ):
         
         # Add radio buttons to select which bot to configure
         st.subheader("Select Bot to Configure")
@@ -453,44 +497,93 @@ with st.sidebar:
         st.markdown("---")
         st.subheader(f"Configure {selected_bot}'s Personality")
         
-        # For each characteristic, create a radio button group to select one condition
-        for characteristic in characteristics_data["characteristics"]:
-            c_id = characteristic["c-id"]
-            c_label = characteristic["c-label"]
+        # Display debate characteristics first with a subheading
+        if characteristics_data["debate"] and "characteristics" in characteristics_data["debate"]:
+            st.markdown("#### Debate Characteristics")
             
-            # Get the conditions for this characteristic
-            conditions = characteristic.get("conditions", [])
-            
-            if conditions:
-                # Create radio buttons for this characteristic
-                options = [f"{cond['label']}" for cond in conditions]
-                default_index = 0
+            # For each debate characteristic, create a radio button group to select one condition
+            for characteristic in characteristics_data["debate"]["characteristics"]:
+                c_id = characteristic["c-id"]
+                c_label = characteristic["c-label"]
                 
-                # Get the current bot's selections
-                current_bot_selections = st.session_state.selected_characteristics[st.session_state.selected_bot]
+                # Get the conditions for this characteristic
+                conditions = characteristic.get("conditions", [])
                 
-                # If we already have a selection for this characteristic, use it as default
-                if c_id in current_bot_selections:
-                    selected_id = current_bot_selections[c_id]
-                    for i, cond in enumerate(conditions):
-                        if cond["id"] == selected_id:
-                            default_index = i
+                if conditions:
+                    # Create radio buttons for this characteristic
+                    options = [f"{cond['label']}" for cond in conditions]
+                    default_index = 0
+                    
+                    # Get the current bot's selections
+                    current_bot_selections = st.session_state.selected_characteristics[st.session_state.selected_bot]
+                    
+                    # If we already have a selection for this characteristic, use it as default
+                    if c_id in current_bot_selections:
+                        selected_id = current_bot_selections[c_id]
+                        for i, cond in enumerate(conditions):
+                            if cond["id"] == selected_id:
+                                default_index = i
+                                break
+                    
+                    # Create the radio button group
+                    selected_option = st.radio(
+                        c_label,
+                        options,
+                        index=default_index,
+                        key=f"debate_{c_id}"  # Add unique key
+                    )
+                    
+                    # Find the selected condition and save its ID
+                    for i, option in enumerate(options):
+                        if option == selected_option:
+                            selected_cond = conditions[i]
+                            # Store the selection for the current bot
+                            current_bot_selections[c_id] = selected_cond["id"]
                             break
+        
+        # Display Myers-Briggs characteristics with a subheading
+        if characteristics_data["mbti"] and "characteristics" in characteristics_data["mbti"]:
+            st.markdown("#### Myers–Briggs Characteristics")
+            
+            # For each MBTI characteristic, create a radio button group to select one condition
+            for characteristic in characteristics_data["mbti"]["characteristics"]:
+                c_id = characteristic["c-id"]
+                c_label = characteristic["c-label"]
                 
-                # Create the radio button group
-                selected_option = st.radio(
-                    c_label,
-                    options,
-                    index=default_index
-                )
+                # Get the conditions for this characteristic
+                conditions = characteristic.get("conditions", [])
                 
-                # Find the selected condition and save its ID
-                for i, option in enumerate(options):
-                    if option == selected_option:
-                        selected_cond = conditions[i]
-                        # Store the selection for the current bot
-                        current_bot_selections[c_id] = selected_cond["id"]
-                        break
+                if conditions:
+                    # Create radio buttons for this characteristic
+                    options = [f"{cond['label']}" for cond in conditions]
+                    default_index = 0
+                    
+                    # Get the current bot's selections
+                    current_bot_selections = st.session_state.selected_characteristics[st.session_state.selected_bot]
+                    
+                    # If we already have a selection for this characteristic, use it as default
+                    if c_id in current_bot_selections:
+                        selected_id = current_bot_selections[c_id]
+                        for i, cond in enumerate(conditions):
+                            if cond["id"] == selected_id:
+                                default_index = i
+                                break
+                    
+                    # Create the radio button group
+                    selected_option = st.radio(
+                        c_label,
+                        options,
+                        index=default_index,
+                        key=f"mbti_{c_id}"  # Add unique key
+                    )
+                    
+                    # Find the selected condition and save its ID
+                    for i, option in enumerate(options):
+                        if option == selected_option:
+                            selected_cond = conditions[i]
+                            # Store the selection for the current bot
+                            current_bot_selections[c_id] = selected_cond["id"]
+                            break
         
         # Get the current bot's selections
         current_bot_selections = st.session_state.selected_characteristics[st.session_state.selected_bot]
@@ -502,19 +595,38 @@ with st.sidebar:
         
         # Create the full combined prompt with all system prompts
         full_combined_prompt = ""
-        for characteristic in characteristics_data["characteristics"]:
-            c_id = characteristic["c-id"]
-            if c_id in current_bot_selections:
-                selected_id = current_bot_selections[c_id]
-                # Find the matching condition
-                for condition in characteristic.get("conditions", []):
-                    if condition["id"] == selected_id:
-                        # Add the system prompt to our combined prompt
-                        if "system_prompt" in condition:
-                            if full_combined_prompt:
-                                full_combined_prompt += "\n\n"
-                            full_combined_prompt += condition["system_prompt"]
-                        break
+        
+        # Add debate characteristics to combined prompt
+        if characteristics_data["debate"] and "characteristics" in characteristics_data["debate"]:
+            for characteristic in characteristics_data["debate"]["characteristics"]:
+                c_id = characteristic["c-id"]
+                if c_id in current_bot_selections:
+                    selected_id = current_bot_selections[c_id]
+                    # Find the matching condition
+                    for condition in characteristic.get("conditions", []):
+                        if condition["id"] == selected_id:
+                            # Add the system prompt to our combined prompt
+                            if "system_prompt" in condition:
+                                if full_combined_prompt:
+                                    full_combined_prompt += "\n\n"
+                                full_combined_prompt += condition["system_prompt"]
+                            break
+        
+        # Add MBTI characteristics to combined prompt
+        if characteristics_data["mbti"] and "characteristics" in characteristics_data["mbti"]:
+            for characteristic in characteristics_data["mbti"]["characteristics"]:
+                c_id = characteristic["c-id"]
+                if c_id in current_bot_selections:
+                    selected_id = current_bot_selections[c_id]
+                    # Find the matching condition
+                    for condition in characteristic.get("conditions", []):
+                        if condition["id"] == selected_id:
+                            # Add the system prompt to our combined prompt
+                            if "system_prompt" in condition:
+                                if full_combined_prompt:
+                                    full_combined_prompt += "\n\n"
+                                full_combined_prompt += condition["system_prompt"]
+                            break
         
         # Get the concise version for the preview, passing the selected bot
         concise_prompt = get_concise_system_prompt(
@@ -570,7 +682,7 @@ with st.sidebar:
             st.success(f"Applied concise personality traits to {st.session_state.selected_bot}")
             st.rerun()
     else:
-        st.warning("characteristics.json not found or has invalid format in the 'prompts' directory.")
+        st.warning("Characteristic files not found or have invalid format in the 'characteristics' directory.")
     
     # Chat history viewer and other sidebar elements
     st.markdown("---")
