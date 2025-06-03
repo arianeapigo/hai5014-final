@@ -76,6 +76,10 @@ if "show_process" not in st.session_state:
 
 if "user_name" not in st.session_state:
     st.session_state.user_name = "User"
+    
+# We no longer need the apply_success flag
+# if "apply_success" not in st.session_state:
+#     st.session_state.apply_success = False
 
 def load_experiments():
     """Load all experiment JSON files from the characteristics directory"""
@@ -146,18 +150,15 @@ def has_same_characteristics(bot1_selections, bot2_selections):
     if not bot1_selections or not bot2_selections:
         return False
     
-    # If the bots have different numbers of characteristics selected, they can't be identical
-    if len(bot1_selections) != len(bot2_selections):
-        return False
+    # Create sets of characteristic:condition pairs for easy comparison
+    bot1_pairs = {f"{k}:{v}" for k, v in bot1_selections.items()}
+    bot2_pairs = {f"{k}:{v}" for k, v in bot2_selections.items()}
     
-    # Check if all characteristics are the same
-    for c_id in bot1_selections:
-        # If this characteristic is missing from the other bot or has a different value
-        if c_id not in bot2_selections or bot1_selections[c_id] != bot2_selections[c_id]:
-            return False
+    # If both bots have selections and they are identical sets
+    if bot1_pairs and bot2_pairs and bot1_pairs == bot2_pairs:
+        return True
     
-    # If we've gotten this far, all characteristics must be identical
-    return True
+    return False
 
 def get_concise_system_prompt(characteristics_data, selected_characteristics, bot="Bot 1"):
     """
@@ -378,6 +379,57 @@ def generate_response(prompt, is_bot2=False):
         st.error(f"Error generating response: {str(e)}")
         return False
 
+def get_formatted_characteristics(characteristics_data, selected_characteristics):
+    """
+    Generate a formatted string listing all selected characteristics for a bot.
+    
+    Args:
+        characteristics_data: The full characteristics data with debate and mbti
+        selected_characteristics: Dict of characteristic IDs to selected condition IDs
+        
+    Returns:
+        A string listing all selected condition labels in a readable format,
+        or "None" if no characteristics are selected
+    """
+    if not characteristics_data or not selected_characteristics or len(selected_characteristics) == 0:
+        return "None"
+    
+    # Check if there are any actual values in the characteristics
+    if not any(selected_characteristics.values()):
+        return "None"
+    
+    selected_labels = []
+    
+    # Process debate characteristics
+    if characteristics_data.get("debate") and "characteristics" in characteristics_data["debate"]:
+        for characteristic in characteristics_data["debate"]["characteristics"]:
+            c_id = characteristic["c-id"]
+            if c_id in selected_characteristics:
+                selected_condition_id = selected_characteristics[c_id]
+                # Find the matching condition to get its label
+                for condition in characteristic.get("conditions", []):
+                    if condition["id"] == selected_condition_id:
+                        selected_labels.append(condition["label"])
+                        break
+    
+    # Process MBTI characteristics
+    if characteristics_data.get("mbti") and "characteristics" in characteristics_data["mbti"]:
+        for characteristic in characteristics_data["mbti"]["characteristics"]:
+            c_id = characteristic["c-id"]
+            if c_id in selected_characteristics:
+                selected_condition_id = selected_characteristics[c_id]
+                # Find the matching condition to get its label
+                for condition in characteristic.get("conditions", []):
+                    if condition["id"] == selected_condition_id:
+                        selected_labels.append(condition["label"])
+                        break
+    
+    if not selected_labels:
+        return "None"
+    
+    # Format the list with commas and proper grammar
+    return ", ".join(selected_labels)
+
 # UI Layout
 st.title("💬 Debate Chatbot Group Chat")
 
@@ -434,54 +486,47 @@ with st.sidebar:
         if len(st.session_state.messages) > 0 and st.session_state.messages[0]["role"] == "assistant1" and "Hello" in st.session_state.messages[0]["content"]:
             st.session_state.messages[0]["content"] = f"Hello {user_name_input}! I'm Bot 1. Bot 2 is also in this group chat. What are we debating about today?"
         
+        # Display success message directly below the button
         st.success("Name updated successfully!")
     
     st.markdown("---")
     
-    # System message editor for Bot 1 - use the value from session_state directly
-    st.subheader("Bot 1 System Message")
-    system_message_value = st.session_state.system_message
-    st.text_area(
-        "Edit Bot 1 System Message", 
-        value=system_message_value,
-        key="system_message_input",
-        height=150
-    )
-    
-    if st.button("Update Bot 1 Message"):
-        # Update the system message
-        st.session_state.system_message = st.session_state.system_message_input
-        
-        # Replace any instances of "the user" with the user's name
-        user_name = st.session_state.user_name if "user_name" in st.session_state else "User"
-        st.session_state.system_message = st.session_state.system_message.replace("the user", user_name)
-        
-        st.success("Bot 1 system message updated!")
-    
-    # System message editor for Bot 2
-    st.markdown("---")
-    st.subheader("Bot 2 System Message")
-    system_message2_value = st.session_state.system_message2
-    st.text_area(
-        "Edit Bot 2 System Message", 
-        value=system_message2_value,
-        key="system_message2_input",
-        height=150
-    )
-    
-    if st.button("Update Bot 2 Message"):
-        # Update the system message
-        st.session_state.system_message2 = st.session_state.system_message2_input
-        
-        # Replace any instances of "the user" with the user's name
-        user_name = st.session_state.user_name if "user_name" in st.session_state else "User"
-        st.session_state.system_message2 = st.session_state.system_message2.replace("the user", user_name)
-        
-        st.success("Bot 2 system message updated!")
-    
     # Characteristics selector section
-    st.markdown("---")
     st.header("Personality Characteristics")
+    
+    # Display applied characteristics for both bots
+    col1, col2 = st.columns(2)
+    
+    # Add a subheader to clearly identify each bot's characteristics section
+    with col1:
+        st.subheader("Bot 1 Characteristics")
+        # Bot 1's applied characteristics
+        if ("selected_characteristics" in st.session_state and 
+            st.session_state.selected_characteristics["Bot 1"] and 
+            len(st.session_state.selected_characteristics["Bot 1"]) > 0 and
+            any(st.session_state.selected_characteristics["Bot 1"].values())):  # Check if any characteristics are actually set
+            characteristics_list = get_formatted_characteristics(load_characteristics(), st.session_state.selected_characteristics["Bot 1"])
+            if characteristics_list != "None":
+                st.info(f"**Active personality traits:** {characteristics_list}")
+            else:
+                st.info("No personality traits applied")
+        else:
+            st.info("No personality traits applied")
+    
+    with col2:
+        st.subheader("Bot 2 Characteristics")
+        # Bot 2's applied characteristics
+        if ("selected_characteristics" in st.session_state and 
+            st.session_state.selected_characteristics["Bot 2"] and 
+            len(st.session_state.selected_characteristics["Bot 2"]) > 0 and
+            any(st.session_state.selected_characteristics["Bot 2"].values())):  # Check if any characteristics are actually set
+            characteristics_list = get_formatted_characteristics(load_characteristics(), st.session_state.selected_characteristics["Bot 2"])
+            if characteristics_list != "None":
+                st.info(f"**Active personality traits:** {characteristics_list}")
+            else:
+                st.info("No personality traits applied")
+        else:
+            st.info("No personality traits applied")
     
     # Load the characteristics data
     characteristics_data = load_characteristics()
@@ -549,6 +594,8 @@ with st.sidebar:
                             selected_cond = conditions[i]
                             # Store the selection for the current bot
                             current_bot_selections[c_id] = selected_cond["id"]
+                            # Update session state immediately to reflect this change
+                            st.session_state.selected_characteristics[st.session_state.selected_bot] = current_bot_selections
                             break
         
         # Display Myers-Briggs characteristics with a subheading
@@ -593,15 +640,14 @@ with st.sidebar:
                             selected_cond = conditions[i]
                             # Store the selection for the current bot
                             current_bot_selections[c_id] = selected_cond["id"]
+                            # Update session state immediately to reflect this change
+                            st.session_state.selected_characteristics[st.session_state.selected_bot] = current_bot_selections
                             break
         
         # Get the current bot's selections
         current_bot_selections = st.session_state.selected_characteristics[st.session_state.selected_bot]
         other_bot = "Bot 2" if st.session_state.selected_bot == "Bot 1" else "Bot 1"
         other_bot_selections = st.session_state.selected_characteristics[other_bot]
-        
-        # Check if bots have the same characteristics
-        same_characteristics = has_same_characteristics(current_bot_selections, other_bot_selections)
         
         # Create the full combined prompt with all system prompts
         full_combined_prompt = ""
@@ -649,48 +695,27 @@ with st.sidebar:
         st.session_state.combined_system_prompt = full_combined_prompt
         st.session_state.concise_system_prompt = concise_prompt
         
-        # Preview the concise system message
-        st.subheader(f"Preview: Optimized System Message for {st.session_state.selected_bot}")
-        st.write("This is the token-optimized version that will be applied:")
-        # Fix empty label warning by providing a label
-        st.text_area(
-            "System Prompt Preview", 
-            value=concise_prompt, 
-            height=150, 
-            disabled=True, 
-            key="preview_system_message",
-            label_visibility="collapsed"  # Hide the label but still provide one
-        )
-        
-        # Show the full combined prompt in an expander
-        with st.expander("View Full (Unoptimized) System Prompt"):
-            st.write("This is the full version of all selected traits (not used to save tokens):")
-            st.text_area(
-                "Full System Prompt",
-                value=full_combined_prompt,
-                height=200,
-                disabled=True,
-                key="full_system_message",
-                label_visibility="collapsed"
-            )
-        
-        # Show warning if the bots have the same characteristics
-        if same_characteristics:
-            st.warning(f"⚠️ With the current selection, {st.session_state.selected_bot} and {other_bot} will have identical personality traits across all characteristics. It is recommended for the bots to have at least one different characteristic to enhance the debate experience.")
-        
-        # Load button - label changes based on which bot is selected
-        if st.button(f"Apply to {st.session_state.selected_bot}", disabled=same_characteristics):
-            # Update the appropriate system message with the concise prompt
-            if st.session_state.selected_bot == "Bot 1":
-                st.session_state.system_message = concise_prompt
-            else:
-                st.session_state.system_message2 = concise_prompt
-                
-            # Make sure user name is properly reflected
-            # The concise_prompt already includes the user name from session state
+        # System message preview sections have been removed as requested
             
-            st.success(f"Applied concise personality traits to {st.session_state.selected_bot}")
-            st.rerun()
+        # Apply button - label changes based on which bot is selected
+        apply_button = st.button(f"Apply to {st.session_state.selected_bot}")
+        
+        # Check for identical characteristics only when the button is clicked
+        if apply_button:
+            # Check if bots have the same characteristics
+            if has_same_characteristics(current_bot_selections, other_bot_selections):
+                st.warning(f"⚠️ {st.session_state.selected_bot} and {other_bot} have identical personality traits across all characteristics. Please make at least one characteristic different to enhance the debate experience.")
+                # Exit the button action without applying changes
+            else:
+                # Only update the system message if characteristics are different
+                # Update the appropriate system message with the concise prompt
+                if st.session_state.selected_bot == "Bot 1":
+                    st.session_state.system_message = concise_prompt
+                else:
+                    st.session_state.system_message2 = concise_prompt
+                
+                # Show success message immediately instead of waiting for next render
+                st.success(f"Applied personality traits to {st.session_state.selected_bot}")
     else:
         st.warning("Characteristic files not found or have invalid format in the 'characteristics' directory.")
     
@@ -730,6 +755,8 @@ with st.sidebar:
         st.session_state.usage_stats = []
         st.session_state.waiting_for_bot2 = False
         # We don't reset selected_characteristics here to maintain the user's selections
+        
+        # Display success message directly below the button
         st.success("Chat history cleared!")
     
     # Process display toggle - moved to bottom
@@ -748,9 +775,11 @@ with chat_container:
         if message["role"] == "assistant1":
             with st.chat_message(message["role"], avatar="🟩"):
                 st.markdown(message["content"])
+                # Removed the display of characteristics under bot messages
         elif message["role"] == "assistant2":
             with st.chat_message(message["role"], avatar="🟦"):
                 st.markdown(message["content"])
+                # Removed the display of characteristics under bot messages
         else:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
