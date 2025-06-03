@@ -24,24 +24,28 @@ if "user_name" not in st.session_state:
     st.session_state.user_name = "User"
 
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant1", "content": f"Hello {st.session_state.user_name}! I'm Bot 1. Bot 2 is also in this group chat. How can we help you today?"}]
+    st.session_state.messages = [{"role": "assistant1", "content": f"Hello {st.session_state.user_name}! I'm Bot 1. Bot 2 is also in this group chat. What are we debating about today?"}]
 
 if "waiting_for_bot2" not in st.session_state:
     st.session_state.waiting_for_bot2 = False
 
 if "system_message" not in st.session_state:
-    st.session_state.system_message = f"""Today is {current_date}. You are Bot 1 in a casual group chat. Keep it friendly and informal! Start messages with "Bot 1:" and use casual language.
+    st.session_state.system_message = f"""Today is {current_date}. You are Bot 1 in a casual debate group chat. Keep it friendly and informal! Start messages with "Bot 1:".
 
-When responding to the user, address them by their name, which is "{st.session_state.user_name if 'user_name' in st.session_state else 'User'}" and share your views. When disagreeing with Bot 2, address both {st.session_state.user_name if 'user_name' in st.session_state else 'User'} and Bot 2 (e.g., "Well, I see what Bot 2 means, but what do you think about this, {st.session_state.user_name if 'user_name' in st.session_state else 'User'}...").
-
-Keep responses conversational, under 75 words, and use emojis occasionally. Make everyone feel included in the discussion!"""
+    Take a clear position on the given debate topic and consistently defend that viewpoint throughout the discussion—no switching sides. Be confident and persuasive, but always respectful.
+    
+    When responding to the user, address them by their name, which is "{st.session_state.user_name if 'user_name' in st.session_state else 'User'}" and share your views. When disagreeing with Bot 2, address both {st.session_state.user_name if 'user_name' in st.session_state else 'User'} and Bot 2 (e.g., "Well, I see what Bot 2 means, but what do you think about this, {st.session_state.user_name if 'user_name' in st.session_state else 'User'}...").
+    
+    Keep responses conversational, under 75 words, and use emojis occasionally. Make everyone feel included in the discussion!"""
 
 if "system_message2" not in st.session_state:
-    st.session_state.system_message2 = f"""Today is {current_date}. You are Bot 2 in a casual group chat. Keep it friendly and informal! Start with "Bot 2:" and keep the group discussion flowing.
+    st.session_state.system_message2 = f"""Today is {current_date}. You are Bot 2 in a casual debate group chat. Keep it friendly and informal! Start with "Bot 2:" and keep the group discussion flowing.
 
-When joining the conversation, acknowledge both {st.session_state.user_name if 'user_name' in st.session_state else 'User'} by name and Bot 1's perspectives. Include everyone in your responses (e.g., "That's an interesting point, {st.session_state.user_name if 'user_name' in st.session_state else 'User'}! What if we looked at it this way..."). Ask questions to keep {st.session_state.user_name if 'user_name' in st.session_state else 'User'} engaged.
-
-Keep responses under 75 words. Use emojis occasionally. Be playfully skeptical but always inclusive!"""
+    You must take a clear position that differs from Bot 1’s and stick to it throughout the debate—no agreeing or switching sides. Challenge Bot 1’s views confidently, but always stay respectful and inclusive.
+    
+    When joining the conversation, acknowledge both {st.session_state.user_name if 'user_name' in st.session_state else 'User'} by name and Bot 1's perspectives. Include everyone in your responses (e.g., "That's an interesting point, {st.session_state.user_name if 'user_name' in st.session_state else 'User'}! What if we looked at it this way..."). Ask questions to keep {st.session_state.user_name if 'user_name' in st.session_state else 'User'} engaged.
+    
+    Keep responses under 75 words. Use emojis occasionally. Be playfully skeptical but always inclusive!"""
 
 if "usage_stats" not in st.session_state:
     st.session_state.usage_stats = []
@@ -312,7 +316,7 @@ def generate_response(prompt, is_bot2=False):
         st.session_state.messages.append({"role": bot_role, "content": ""})
         
         # Create chat message container with appropriate avatar before streaming
-        with st.chat_message(bot_role, avatar="🤖" if bot_role == "assistant1" else "🎯"):
+        with st.chat_message(bot_role, avatar="🟩" if bot_role == "assistant1" else "🟦"):
             message_placeholder = st.empty()
             for chunk in response:
                 if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
@@ -391,6 +395,12 @@ st.markdown("""
     .main-content {
         padding-bottom: 100px; /* Add space at the bottom for the fixed input */
     }
+    /* Custom styling for user avatar */
+    .st-emotion-cache-1ghhuty {
+        background-color: white !important;
+        color: rgb(187 190 197) !important;
+        border: 1px solid rgb(213, 218, 229);
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -422,7 +432,7 @@ with st.sidebar:
         # If this is the first time the user is setting their name, we should also update
         # the welcome message if it's still the first message in the chat
         if len(st.session_state.messages) > 0 and st.session_state.messages[0]["role"] == "assistant1" and "Hello" in st.session_state.messages[0]["content"]:
-            st.session_state.messages[0]["content"] = f"Hello {user_name_input}! I'm Bot 1. Bot 2 is also in this group chat. How can we help you today?"
+            st.session_state.messages[0]["content"] = f"Hello {user_name_input}! I'm Bot 1. Bot 2 is also in this group chat. What are we debating about today?"
         
         st.success("Name updated successfully!")
     
@@ -716,7 +726,7 @@ with st.sidebar:
     # Clear chat button
     if st.button("Clear Chat"):
         user_name = st.session_state.user_name if "user_name" in st.session_state else "User"
-        st.session_state.messages = [{"role": "assistant1", "content": f"Hello {user_name}! I'm Bot 1. Bot 2 is also in this group chat. How can we help you today?"}]
+        st.session_state.messages = [{"role": "assistant1", "content": f"Hello {user_name}! I'm Bot 1. Bot 2 is also in this group chat. What are we debating about today?"}]
         st.session_state.usage_stats = []
         st.session_state.waiting_for_bot2 = False
         # We don't reset selected_characteristics here to maintain the user's selections
@@ -736,10 +746,10 @@ with chat_container:
         if not message["content"]:  # Skip empty messages
             continue
         if message["role"] == "assistant1":
-            with st.chat_message(message["role"], avatar="🤖"):
+            with st.chat_message(message["role"], avatar="🟩"):
                 st.markdown(message["content"])
         elif message["role"] == "assistant2":
-            with st.chat_message(message["role"], avatar="🎯"):
+            with st.chat_message(message["role"], avatar="🟦"):
                 st.markdown(message["content"])
         else:
             with st.chat_message(message["role"]):
