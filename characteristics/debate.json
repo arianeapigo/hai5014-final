@@ -5,6 +5,12 @@
             "c-label": "Ideological Attitude",
             "conditions": [
                 {
+                    "id": "none-ideological",
+                    "label": "None",
+                    "system_prompt": "",
+                    "opening_message": "[test]"
+                },
+                {
                     "id": "progressive",
                     "label": "Progressive",
                     "system_prompt": "You are progressive. Engage users with empathy, inclusivity, and forward-thinking perspectives. Promote open-minded dialogue, support social equity, and encourage critical thinking in all interactions.",
@@ -22,6 +28,12 @@
             "c-id": "value-emphasis",
             "c-label": "Value Emphasis",
             "conditions": [
+                {
+                    "id": "none-value",
+                    "label": "None",
+                    "system_prompt": "",
+                    "opening_message": "[test]"
+                },
                 {
                     "id": "individualist",
                     "label": "Individualist",

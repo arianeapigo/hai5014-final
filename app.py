@@ -33,6 +33,8 @@ if "system_message" not in st.session_state:
     st.session_state.system_message = f"""Today is {current_date}. You are Bot 1 in a casual debate group chat. Keep it friendly and informal! Start messages with "Bot 1:".
 
     Take a clear position on the given debate topic and consistently defend that viewpoint throughout the discussion—no switching sides. Be confident and persuasive, but always respectful.
+
+    Your main goal is to not only share your viewpoint but also actively try to convince {st.session_state.user_name if 'user_name' in st.session_state else 'User'} to agree with you. Use logical reasoning, relatable examples, and a friendly tone to win them over.
     
     When responding to the user, address them by their name, which is "{st.session_state.user_name if 'user_name' in st.session_state else 'User'}" and share your views. When disagreeing with Bot 2, address both {st.session_state.user_name if 'user_name' in st.session_state else 'User'} and Bot 2 (e.g., "Well, I see what Bot 2 means, but what do you think about this, {st.session_state.user_name if 'user_name' in st.session_state else 'User'}...").
     
@@ -42,6 +44,8 @@ if "system_message2" not in st.session_state:
     st.session_state.system_message2 = f"""Today is {current_date}. You are Bot 2 in a casual debate group chat. Keep it friendly and informal! Start with "Bot 2:" and keep the group discussion flowing.
 
     You must take a clear position that differs from Bot 1’s and stick to it throughout the debate—no agreeing or switching sides. Challenge Bot 1’s views confidently, but always stay respectful and inclusive.
+
+    Your goal is not just to share your perspective, but to actively try to persuade {st.session_state.user_name if 'user_name' in st.session_state else 'User'} to see things your way. Use thoughtful reasoning, relatable examples, and a light, engaging tone to make your case compelling.
     
     When joining the conversation, acknowledge both {st.session_state.user_name if 'user_name' in st.session_state else 'User'} by name and Bot 1's perspectives. Include everyone in your responses (e.g., "That's an interesting point, {st.session_state.user_name if 'user_name' in st.session_state else 'User'}! What if we looked at it this way..."). Ask questions to keep {st.session_state.user_name if 'user_name' in st.session_state else 'User'} engaged.
     
@@ -58,8 +62,8 @@ if "selected_condition" not in st.session_state:
     
 if "selected_characteristics" not in st.session_state:
     st.session_state.selected_characteristics = {
-        "Bot 1": {},
-        "Bot 2": {}
+        "Bot 1": {"applied": False},
+        "Bot 2": {"applied": False}
     }
     
 if "selected_bot" not in st.session_state:
@@ -189,8 +193,8 @@ def get_concise_system_prompt(characteristics_data, selected_characteristics, bo
                 # Find the matching condition
                 for condition in characteristic.get("conditions", []):
                     if condition["id"] == selected_id:
-                        # Extract the first sentence as the key trait
-                        if "system_prompt" in condition:
+                        # Extract the first sentence as the key trait, but skip if empty (None condition)
+                        if "system_prompt" in condition and condition["system_prompt"].strip():
                             # Split by period to get first sentence, but handle cases where
                             # the first sentence doesn't end with a period
                             prompt = condition["system_prompt"]
@@ -229,7 +233,7 @@ def get_concise_system_prompt(characteristics_data, selected_characteristics, bo
     
     # Create a condensed system prompt with all traits
     bot_number = "1" if bot == "Bot 1" else "2"
-    concise_prompt = f"Today is {current_date}. You are {bot} in a group chat with the following personality traits:\n\n"
+    concise_prompt = f"Today is {current_date}. You are {bot} in a casual debate group chat with the following personality traits:\n\n"
     
     # Add each trait as a bullet point
     for trait in key_traits:
@@ -239,9 +243,9 @@ def get_concise_system_prompt(characteristics_data, selected_characteristics, bo
     
     # Add the specific instructions based on which bot this is for
     if bot == "Bot 1":
-        concise_prompt += f"\nWhen responding to {user_name}, acknowledge them by name first and share your views. When disagreeing with Bot 2, address both {user_name} and Bot 2 (e.g., \"Well, I see what Bot 2 means, but what do you think about this, {user_name}...\").\n\nKeep responses conversational, under 75 words, and use emojis occasionally. Make everyone feel included in the discussion!"
+        concise_prompt += f"\nStart messages with 'Bot 1:'. Take a clear position on the given debate topic and consistently defend that viewpoint throughout the discussion—no switching sides. Actively try to convince {user_name} to agree with you. When responding to the user, address them by their name, which is '{user_name}'. When disagreeing with Bot 2, address both {user_name} and Bot 2 (e.g., 'Well, I see what Bot 2 means, but what do you think about this, {user_name}...'). Keep responses conversational, under 75 words, and use emojis occasionally. Make everyone feel included in the discussion!"
     else:  # Bot 2
-        concise_prompt += f"\nWhen joining the conversation, acknowledge both {user_name} by name and Bot 1's perspectives. Include everyone in your responses (e.g., \"That's an interesting point, {user_name}! What if we looked at it this way...\"). Ask questions to keep {user_name} engaged.\n\nKeep responses under 75 words. Use emojis occasionally."
+        concise_prompt += f"\nStart with 'Bot 2:' and keep the group discussion flowing. You must take a clear position that differs from Bot 1’s and stick to it throughout the debate—no agreeing or switching sides. Challenge Bot 1’s views, and actively try to persuade {user_name} to see things your way. When joining the conversation, acknowledge both {user_name} by name and Bot 1's perspectives. Include everyone in your responses (e.g., 'That's an interesting point, {user_name}! What if we looked at it this way...'). Ask questions to keep {user_name} engaged. Keep responses under 75 words. Use emojis occasionally."
     
     return concise_prompt
 
@@ -394,8 +398,11 @@ def get_formatted_characteristics(characteristics_data, selected_characteristics
     if not characteristics_data or not selected_characteristics or len(selected_characteristics) == 0:
         return "None"
     
+    # Skip the "applied" flag when checking for values
+    filtered_characteristics = {k: v for k, v in selected_characteristics.items() if k != "applied"}
+    
     # Check if there are any actual values in the characteristics
-    if not any(selected_characteristics.values()):
+    if not any(filtered_characteristics.values()):
         return "None"
     
     selected_labels = []
@@ -406,10 +413,19 @@ def get_formatted_characteristics(characteristics_data, selected_characteristics
             c_id = characteristic["c-id"]
             if c_id in selected_characteristics:
                 selected_condition_id = selected_characteristics[c_id]
+                if not selected_condition_id:
+                    continue
+                    
+                # Skip "None" conditions from debate characteristics
+                if selected_condition_id.startswith("none-"):
+                    continue
+                    
                 # Find the matching condition to get its label
                 for condition in characteristic.get("conditions", []):
                     if condition["id"] == selected_condition_id:
-                        selected_labels.append(condition["label"])
+                        # Only add non-empty conditions to the label list
+                        if condition["system_prompt"] and condition["label"] != "None":
+                            selected_labels.append(condition["label"])
                         break
     
     # Process MBTI characteristics
@@ -418,6 +434,9 @@ def get_formatted_characteristics(characteristics_data, selected_characteristics
             c_id = characteristic["c-id"]
             if c_id in selected_characteristics:
                 selected_condition_id = selected_characteristics[c_id]
+                if not selected_condition_id:
+                    continue
+                    
                 # Find the matching condition to get its label
                 for condition in characteristic.get("conditions", []):
                     if condition["id"] == selected_condition_id:
@@ -502,9 +521,9 @@ with st.sidebar:
         st.subheader("Bot 1 Characteristics")
         # Bot 1's applied characteristics
         if ("selected_characteristics" in st.session_state and 
-            st.session_state.selected_characteristics["Bot 1"] and 
-            len(st.session_state.selected_characteristics["Bot 1"]) > 0 and
-            any(st.session_state.selected_characteristics["Bot 1"].values())):  # Check if any characteristics are actually set
+            st.session_state.selected_characteristics.get("Bot 1") and 
+            "applied" in st.session_state.selected_characteristics.get("Bot 1", {}) and
+            st.session_state.selected_characteristics["Bot 1"]["applied"] == True):  # Only show if explicitly applied
             characteristics_list = get_formatted_characteristics(load_characteristics(), st.session_state.selected_characteristics["Bot 1"])
             if characteristics_list != "None":
                 st.info(f"**Active personality traits:** {characteristics_list}")
@@ -517,9 +536,9 @@ with st.sidebar:
         st.subheader("Bot 2 Characteristics")
         # Bot 2's applied characteristics
         if ("selected_characteristics" in st.session_state and 
-            st.session_state.selected_characteristics["Bot 2"] and 
-            len(st.session_state.selected_characteristics["Bot 2"]) > 0 and
-            any(st.session_state.selected_characteristics["Bot 2"].values())):  # Check if any characteristics are actually set
+            st.session_state.selected_characteristics.get("Bot 2") and 
+            "applied" in st.session_state.selected_characteristics.get("Bot 2", {}) and
+            st.session_state.selected_characteristics["Bot 2"]["applied"] == True):  # Only show if explicitly applied
             characteristics_list = get_formatted_characteristics(load_characteristics(), st.session_state.selected_characteristics["Bot 2"])
             if characteristics_list != "None":
                 st.info(f"**Active personality traits:** {characteristics_list}")
@@ -711,11 +730,18 @@ with st.sidebar:
                 # Update the appropriate system message with the concise prompt
                 if st.session_state.selected_bot == "Bot 1":
                     st.session_state.system_message = concise_prompt
+                    # Mark these characteristics as explicitly applied
+                    st.session_state.selected_characteristics["Bot 1"]["applied"] = True
                 else:
                     st.session_state.system_message2 = concise_prompt
+                    # Mark these characteristics as explicitly applied
+                    st.session_state.selected_characteristics["Bot 2"]["applied"] = True
                 
                 # Show success message immediately instead of waiting for next render
                 st.success(f"Applied personality traits to {st.session_state.selected_bot}")
+                
+                # Force a rerun to update the UI immediately
+                st.rerun()
     else:
         st.warning("Characteristic files not found or have invalid format in the 'characteristics' directory.")
     
