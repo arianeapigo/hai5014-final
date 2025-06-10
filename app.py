@@ -10,7 +10,7 @@ load_dotenv()
 
 # Set page config
 st.set_page_config(
-    page_title="Debate Chatbot Group Chat",
+    page_title="DebateTwin: Customizable Dual-Chatbot Debate Platform",
     page_icon="💬",
     layout="wide"
 )
@@ -450,7 +450,7 @@ def get_formatted_characteristics(characteristics_data, selected_characteristics
     return ", ".join(selected_labels)
 
 # UI Layout
-st.title("💬 Debate Chatbot Group Chat")
+st.title("💬 DebateTwin")
 
 # Add CSS to make the input box stick to the bottom
 st.markdown("""
@@ -477,6 +477,7 @@ st.markdown("""
 
 # Sidebar for settings
 with st.sidebar:
+    st.title("Customizable Dual-Chatbot Debate Platform")
     st.header("Settings")
     
     # User name input field
@@ -788,6 +789,10 @@ with st.sidebar:
     # Process display toggle - moved to bottom
     st.markdown("---")
     st.session_state.show_process = st.checkbox("Show Model Process (Last message)", value=st.session_state.show_process)
+    
+    # Add copyright fine print at the bottom
+    st.markdown("---")
+    st.markdown("<div style='font-size: 0.8em; color: #666;'>DebateTwin: Customizable Dual-Chatbot Debate Platform is a code-based final project by Ariane Apigo, Jeong-in Choi, and Hae-min Lee for HAI5014, taught by Pim Kamphuis at Sungkyunkwan University, Seoul, South Korea in Spring 2025.</div>", unsafe_allow_html=True)
 
 # Main chat area with padding at bottom
 chat_container = st.container()
