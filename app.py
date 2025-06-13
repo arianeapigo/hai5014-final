@@ -81,9 +81,8 @@ if "show_process" not in st.session_state:
 if "user_name" not in st.session_state:
     st.session_state.user_name = "User"
     
-# We no longer need the apply_success flag
-# if "apply_success" not in st.session_state:
-#     st.session_state.apply_success = False
+if "apply_success" not in st.session_state:
+    st.session_state.apply_success = False
 
 def load_experiments():
     """Load all experiment JSON files from the characteristics directory"""
@@ -139,30 +138,33 @@ def load_characteristics():
         st.warning(f"Error loading characteristics files: {str(e)}")
         return None
 
-def has_same_characteristics(bot1_selections, bot2_selections):
+def has_same_characteristics(current_bot_selections, selected_bot):
     """
-    Check if Bot 1 and Bot 2 have exactly the same characteristic selections.
+    Check if the currently selected characteristics for selected_bot are identical to 
+    the applied characteristics of the other bot.
     
     Args:
-        bot1_selections: Dict of characteristic IDs to selected condition IDs for Bot 1
-        bot2_selections: Dict of characteristic IDs to selected condition IDs for Bot 2
+        current_bot_selections: Dict of characteristic IDs to selected condition IDs that are
+                              currently selected but not yet applied
+        selected_bot: The bot currently being configured ("Bot 1" or "Bot 2")
         
     Returns:
-        True if ALL the bots' characteristics are identical, False otherwise
+        True if the current selections match the other bot's applied characteristics, False otherwise
     """
-    # We need both bots to have selections to compare
-    if not bot1_selections or not bot2_selections:
+    # Get the other bot's stored characteristics
+    other_bot = "Bot 2" if selected_bot == "Bot 1" else "Bot 1"
+    other_bot_characteristics = st.session_state.selected_characteristics.get(other_bot, {})
+    
+    # Only compare if the other bot has applied characteristics
+    if not other_bot_characteristics.get("applied", False):
         return False
+        
+    # Filter out the "applied" flag from both sets for comparison
+    filtered_current = {k: v for k, v in current_bot_selections.items() if k != "applied"}
+    filtered_other = {k: v for k, v in other_bot_characteristics.items() if k != "applied"}
     
-    # Create sets of characteristic:condition pairs for easy comparison
-    bot1_pairs = {f"{k}:{v}" for k, v in bot1_selections.items()}
-    bot2_pairs = {f"{k}:{v}" for k, v in bot2_selections.items()}
-    
-    # If both bots have selections and they are identical sets
-    if bot1_pairs and bot2_pairs and bot1_pairs == bot2_pairs:
-        return True
-    
-    return False
+    # Compare the filtered characteristics
+    return filtered_current == filtered_other
 
 def get_concise_system_prompt(characteristics_data, selected_characteristics, bot="Bot 1"):
     """
@@ -516,37 +518,31 @@ with st.sidebar:
     
     # Display applied characteristics for both bots
     col1, col2 = st.columns(2)
+
+    # Initialize placeholder texts in session state if they don't exist
+    if "bot1_traits_text" not in st.session_state:
+        st.session_state.bot1_traits_text = "No personality traits applied"
+    if "bot2_traits_text" not in st.session_state:
+        st.session_state.bot2_traits_text = "No personality traits applied"
+    
+    # Initialize empty containers in session state if they don't exist
+    if "bot1_traits_container" not in st.session_state:
+        st.session_state.bot1_traits_container = None
+    if "bot2_traits_container" not in st.session_state:
+        st.session_state.bot2_traits_container = None
     
     # Add a subheader to clearly identify each bot's characteristics section
     with col1:
         st.subheader("Bot 1 Characteristics")
-        # Bot 1's applied characteristics
-        if ("selected_characteristics" in st.session_state and 
-            st.session_state.selected_characteristics.get("Bot 1") and 
-            "applied" in st.session_state.selected_characteristics.get("Bot 1", {}) and
-            st.session_state.selected_characteristics["Bot 1"]["applied"] == True):  # Only show if explicitly applied
-            characteristics_list = get_formatted_characteristics(load_characteristics(), st.session_state.selected_characteristics["Bot 1"])
-            if characteristics_list != "None":
-                st.info(f"**Active personality traits:** {characteristics_list}")
-            else:
-                st.info("No personality traits applied")
-        else:
-            st.info("No personality traits applied")
+        # Create an empty container and store it in session state
+        st.session_state.bot1_traits_container = st.empty()
+        st.session_state.bot1_traits_container.markdown(st.session_state.bot1_traits_text)
     
     with col2:
         st.subheader("Bot 2 Characteristics")
-        # Bot 2's applied characteristics
-        if ("selected_characteristics" in st.session_state and 
-            st.session_state.selected_characteristics.get("Bot 2") and 
-            "applied" in st.session_state.selected_characteristics.get("Bot 2", {}) and
-            st.session_state.selected_characteristics["Bot 2"]["applied"] == True):  # Only show if explicitly applied
-            characteristics_list = get_formatted_characteristics(load_characteristics(), st.session_state.selected_characteristics["Bot 2"])
-            if characteristics_list != "None":
-                st.info(f"**Active personality traits:** {characteristics_list}")
-            else:
-                st.info("No personality traits applied")
-        else:
-            st.info("No personality traits applied")
+        # Create an empty container and store it in session state
+        st.session_state.bot2_traits_container = st.empty()
+        st.session_state.bot2_traits_container.markdown(st.session_state.bot2_traits_text)
     
     # Load the characteristics data
     characteristics_data = load_characteristics()
@@ -717,32 +713,49 @@ with st.sidebar:
         
         # System message preview sections have been removed as requested
             
+        # Initialize apply_success if not exists
+        if "apply_success" not in st.session_state:
+            st.session_state.apply_success = False
+            
         # Apply button - label changes based on which bot is selected
         apply_button = st.button(f"Apply to {st.session_state.selected_bot}")
         
         # Check for identical characteristics only when the button is clicked
         if apply_button:
             # Check if bots have the same characteristics
-            if has_same_characteristics(current_bot_selections, other_bot_selections):
+            if has_same_characteristics(current_bot_selections, st.session_state.selected_bot):
                 st.warning(f"⚠️ {st.session_state.selected_bot} and {other_bot} have identical personality traits across all characteristics. Please make at least one characteristic different to enhance the debate experience.")
-                # Exit the button action without applying changes
+                st.session_state.apply_success = False
             else:
                 # Only update the system message if characteristics are different
-                # Update the appropriate system message with the concise prompt
-                if st.session_state.selected_bot == "Bot 1":
-                    st.session_state.system_message = concise_prompt
-                    # Mark these characteristics as explicitly applied
-                    st.session_state.selected_characteristics["Bot 1"]["applied"] = True
+                # Mark these characteristics as applied for the current bot
+                current_bot_selections["applied"] = True
+                st.session_state.selected_characteristics[st.session_state.selected_bot] = current_bot_selections
+                
+                # Update the traits text immediately
+                characteristics_list = get_formatted_characteristics(characteristics_data, current_bot_selections)
+                if characteristics_list != "None":
+                    traits_text = f"**Active personality traits:** {characteristics_list}"
                 else:
-                    st.session_state.system_message2 = concise_prompt
-                    # Mark these characteristics as explicitly applied
-                    st.session_state.selected_characteristics["Bot 2"]["applied"] = True
+                    traits_text = "No personality traits applied"
+                    
+                if st.session_state.selected_bot == "Bot 1":
+                    st.session_state.bot1_traits_text = traits_text
+                    if st.session_state.bot1_traits_container is not None:
+                        st.session_state.bot1_traits_container.markdown(traits_text)
+                else:
+                    st.session_state.bot2_traits_text = traits_text
+                    if st.session_state.bot2_traits_container is not None:
+                        st.session_state.bot2_traits_container.markdown(traits_text)
                 
-                # Show success message immediately instead of waiting for next render
-                st.success(f"Applied personality traits to {st.session_state.selected_bot}")
-                
-                # Force a rerun to update the UI immediately
-                st.rerun()
+                st.session_state.apply_success = True
+        
+        # Show success message if apply was successful
+        if st.session_state.apply_success:
+            st.success(f"✅ Successfully applied personality traits to {st.session_state.selected_bot}!")
+            # Reset the success flag for next time
+            st.session_state.apply_success = False
+
     else:
         st.warning("Characteristic files not found or have invalid format in the 'characteristics' directory.")
     
