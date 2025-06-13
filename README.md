@@ -2,6 +2,8 @@
 
 DebateTwin is an interactive AI debate platform that allows users to customize the debate styles and MBTI types of two chatbots, and have them engage in real-time discussions on user-defined topics.
 
+Watch the [demonstration](https://drive.google.com/file/d/1M2eL7QM0sTCGhy7xsi0LNtTqP1fzYLkq/view?usp=drive_link).
+
 Live application available at [debatetwin.streamlit.app](https://debatetwin.streamlit.app/).
 
 ---
